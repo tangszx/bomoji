@@ -729,7 +729,26 @@ function setNavActive(id) {
   $$('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.route === id));
 }
 
+/* 支持 ?key=APIKEY[&base=...][&model=...] 一键配置：保存后立即从地址栏清除，避免密钥留在历史里 */
+function captureKeyFromUrl() {
+  const q = new URLSearchParams(location.search);
+  const key = q.get('key');
+  if (!key) return;
+  const s = Store.state.settings;
+  s.apiKey = key.trim();
+  const base = q.get('base');
+  const model = q.get('model');
+  if (base) s.apiBase = base.trim();
+  if (model) s.model = model.trim();
+  Store.save();
+  try {
+    history.replaceState(null, '', location.pathname + location.hash);
+  } catch (_) { /* 旧浏览器忽略 */ }
+  setTimeout(() => toast('AI 已配置完成 ✓'), 600);
+}
+
 function boot() {
+  captureKeyFromUrl();
   const nav = el('nav', { class: 'bottom-nav', 'aria-label': '主导航' },
     NAV.map(n => el('button', {
       class: 'nav-btn', dataset: { route: n.id },
