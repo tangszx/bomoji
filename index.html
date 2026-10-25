@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>薄肌与自律</title>
+  <meta name="description" content="体育中考三项备战：科学课表 · 训练打卡 · AI 状态分析 · 手术康复安全守护">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f9fafb" media="(prefers-color-scheme: light)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="薄肌自律">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="assets/icon-192.png">
+  <link rel="stylesheet" href="css/style.css?v=1.0.9">
+</head>
+<body>
+  <main id="view"></main>
+  <noscript>
+    <p style="padding:40px 20px;text-align:center">薄肌与自律需要启用 JavaScript 才能运行。</p>
+  </noscript>
+
+  <script src="js/util.js?v=1.0.9"></script>
+  <script src="js/store.js?v=1.0.9"></script>
+  <script src="js/plan.js?v=1.0.9"></script>
+  <script src="js/safety.js?v=1.0.9"></script>
+  <script src="js/charts.js?v=1.0.9"></script>
+  <script src="js/analysis.js?v=1.0.9"></script>
+  <script src="js/app.js?v=1.0.9"></script>
+
+  <script>
+    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(() => { /* 离线缓存注册失败不影响使用 */ });
+      });
+    }
+  </script>
+</body>
+</html>
