@@ -184,7 +184,9 @@ function showAIError(wrap, err, kind) {
   wrap.innerHTML = '';
   const isNet = err.message === 'NETWORK';
   wrap.append(el('p', { class: 'ai-error' },
-    isNet ? '直连失败：通常是浏览器跨域限制或网络不通。' : `调用失败：${err.message}`));
+    isNet ? '直连失败：服务商不允许浏览器跨域直连（或网络不通）。' : `调用失败：${err.message}`));
+  wrap.append(el('p', { class: 'muted small' },
+    '① 点下方按钮复制提示词，粘贴给任意 AI 助手即可分析；② 想让 app 内一键 AI 全自动：免费部署 Cloudflare Worker 中转（约 10 分钟，见 README「开启 app 内 AI」）。'));
   wrap.append(el('button', {
     class: 'btn btn-ghost',
     onclick: () => {
