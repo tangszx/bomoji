@@ -102,6 +102,19 @@ function viewToday() {
   if (!week.inRecovery && day.focus && day.focus !== '休息') subParts.push(day.focus + '日');
   parts.push(appHeader('今日', subParts.join(' · ')));
 
+  /* 新手三步引导 */
+  if (!Store.state.ui.guideDismissed) {
+    parts.push(card('第一次用？三步上手',
+      el('div', { class: 'info-block' }, el('p', {}, '① 每天打开「今日」照着练：工作日是 20-30 分钟短课，主课集中在周六，做完一项勾一项。')),
+      el('div', { class: 'info-block' }, el('p', {}, '② 练完点「训练后打卡」如实填状态——强度调整和安全提醒全靠它，两分钟的事。')),
+      el('div', { class: 'info-block' }, el('p', {}, '③ 隔周的周六是「测试日」，测完把成绩记进「记录」——考前预估和 AI 全靠它变准。')),
+      el('button', {
+        class: 'btn btn-ghost sm', onclick: () => {
+          Store.state.ui.guideDismissed = true; Store.save(); render();
+        },
+      }, '知道了，开始')));
+  }
+
   /* 考试日 / 前夜 */
   if (prof.examDate === today) {
     parts.push(el('div', { class: 'notice notice-stop' },
@@ -143,6 +156,45 @@ function viewToday() {
 }
 
 function FOCUS_SHORT(f) { return f === '休息' ? '' : f ? f + '日' : ''; }
+
+/* 三项目考前预估（记录 ≥2 条才出，少时明确说数据不足） */
+function examProjection() {
+  const prof = Store.profile();
+  if (!prof.examDate) return null;
+  const defs = [
+    {
+      id: 'run1000', name: '1000 米', lowerBetter: true,
+      fmt: v => fmtRunTime(Math.round(v)), rateFmt: v => fmtRunTime(Math.abs(Math.round(v))) + '/周',
+    },
+    {
+      id: 'jump', name: '立定跳远', lowerBetter: false,
+      fmt: v => v.toFixed(2) + ' 米', rateFmt: v => Math.abs(v).toFixed(2) + ' 米/周',
+    },
+    {
+      id: 'pullups', name: '引体向上', lowerBetter: false,
+      fmt: v => Math.round(v) + ' 个', rateFmt: v => Math.abs(Math.round(v)) + ' 个/周',
+    },
+  ];
+  const rows = [];
+  let any = false;
+  for (const d of defs) {
+    const recs = Store.state.records.filter(r => r.event === d.id).sort((a, b) => (a.date < b.date ? -1 : 1));
+    const p = Plan.project(recs, prof.targets[d.id], prof.examDate, todayStr(), d.lowerBetter);
+    if (!p) { rows.push({ name: d.name, text: '——', verdict: '记录 2 次后开启', ok: false }); continue; }
+    any = true;
+    rows.push({
+      name: d.name,
+      text: `考试日约 ${d.fmt(p.projected)}`,
+      verdict: p.verdict + (p.confident ? '' : '（数据少）') + ` · 每周${p.improving >= 0 ? '+' : '-'}${d.rateFmt(p.improving)}`,
+      ok: p.achieved,
+    });
+  }
+  if (!any) return null;
+  const note = prof.recovery.legSurgery && !prof.recovery.doctorClear
+    ? '注：当前处于康复期，跳类成绩未恢复属正常，预估仅供方向参考。'
+    : '趋势基于已录成绩的直线外推——训练不是直线，波动正常，预估随每次测试自动变准。';
+  return { rows, note };
+}
 
 /* 状态卡（本地规则评估 + AI 深度分析入口） */
 function statusCard(date, c) {
@@ -211,6 +263,19 @@ function viewPlan() {
   const rel = ui.weekOffset === 0 ? '本周' : ui.weekOffset === 1 ? '下周' : ui.weekOffset === -1 ? '上周' : `${ui.weekOffset > 0 ? '后' : '前'} ${Math.abs(ui.weekOffset)} 周`;
   parts.push(appHeader('训练计划', `${rel} · ${week.phaseName}${week.deload ? ' · 减量周' : ''}`));
 
+  /* 考前预估 */
+  const proj = examProjection();
+  if (proj) {
+    parts.push(card('考前预估（按已录成绩的趋势推算）',
+      el('div', { class: 'proj-list' }, proj.map(row =>
+        el('div', { class: 'proj-row' },
+          el('span', { class: 'proj-name' }, row.name),
+          el('span', { class: 'proj-val num' }, row.text),
+          el('span', { class: 'proj-verdict ' + (row.ok ? 'accent' : 'muted') }, row.verdict)))),
+      el('p', { class: 'muted small' }, proj.note),
+      el('p', { class: 'muted small' }, '预估会随每次测试自动变准；它在提醒方向，不是承诺。')));
+  }
+
   /* 康复提醒横幅 */
   if (prof.recovery.legSurgery && !prof.recovery.doctorClear) {
     parts.push(el('div', { class: 'notice notice-warn' },
@@ -248,6 +313,8 @@ function viewPlan() {
 
   /* 一周课表 */
   parts.push(card(`课表（${prof.daysPerWeek} 天/周 · 工作日短课 周末主课）`,
+    el('p', { class: 'muted small' },
+      week.inRecovery ? '目标：让手术腿安全承压，跳跃强度逐周渐进，骨头比你想象的需要更多耐心' : Plan.PHASE_INTENT[week.phase]),
     el('div', { class: 'plan-list' }, week.days.map(d => {
       const checkin = Store.checkin(d.date);
       const isToday = d.date === today;
@@ -285,6 +352,13 @@ function viewPlan() {
             },
           }, 'AI 调整下周计划')
         : el('button', { class: 'btn btn-ghost', onclick: () => { location.hash = '#settings'; } }, '填入 API Key 后可用'))));
+
+  /* 训练依据 */
+  parts.push(card('训练依据（为什么这么练）',
+    Plan.EVIDENCE.map(e2 => el('div', { class: 'info-block' },
+      el('h3', {}, e2.h),
+      el('p', {}, e2.p),
+      el('p', { class: 'src' }, '依据：' + e2.src)))));
 
   /* 参考标准 */
   parts.push(card('中考评分参考（各地不同，以本地文件为准）',
@@ -509,10 +583,20 @@ function viewSettings() {
   parts.push(recBox);
 
   /* AI 配置 */
+  const setPreset = (base, model, name) => {
+    s.apiBase = base; s.model = model;
+    Store.save();
+    toast('已切换到 ' + name + '——确认 Key 是该服务商的');
+    render();
+  };
   parts.push(card('AI 分析（OpenAI 兼容接口）',
-    field('接口地址', el('input', { type: 'url', value: s.apiBase, placeholder: 'https://open.bigmodel.cn/api/paas/v4',
+    el('p', { class: 'muted small' }, '服务商预设：'),
+    el('div', { class: 'btn-row', style: 'margin-top:0;margin-bottom:12px' },
+      el('button', { class: 'btn btn-ghost sm', onclick: () => setPreset('https://api.deepseek.com', 'deepseek-chat', 'DeepSeek') }, 'DeepSeek（浏览器可直连）'),
+      el('button', { class: 'btn btn-ghost sm', onclick: () => setPreset('https://open.bigmodel.cn/api/paas/v4', 'glm-4-flash', '智谱') }, '智谱 glm-4-flash（免费）')),
+    field('接口地址', el('input', { type: 'url', value: s.apiBase, placeholder: 'https://api.deepseek.com',
       onchange: e => { s.apiBase = e.target.value.trim(); Store.save(); saved(e.target); } })),
-    field('模型', el('input', { type: 'text', value: s.model, placeholder: 'glm-4-flash',
+    field('模型', el('input', { type: 'text', value: s.model, placeholder: 'deepseek-chat 或 glm-4-flash',
       onchange: e => { s.model = e.target.value.trim(); Store.save(); saved(e.target); } })),
     field('API Key', el('input', { type: 'password', value: s.apiKey, placeholder: 'sk-… 或服务商提供的密钥', autocomplete: 'off',
       onchange: e => { s.apiKey = e.target.value.trim(); Store.save(); saved(e.target); } })),
@@ -527,7 +611,7 @@ function viewSettings() {
           setTimeout(() => { b.disabled = false; b.textContent = '测试连接'; }, 2500);
         },
       }, '测试连接')),
-    el('p', { class: 'muted small' }, 'Key 只保存在本机浏览器，请求由你的设备直连服务商。推荐智谱 glm-4-flash（免费额度即可用）；任何 OpenAI 兼容接口都可以。若浏览器提示跨域失败，可用「复制提示词」模式。')));
+    el('p', { class: 'muted small' }, 'Key 只保存在本机浏览器，请求由你的设备直连服务商。DeepSeek 可浏览器直连、按量计费（本 app 用量下每月约几毛钱）；智谱 glm-4-flash 有免费额度但浏览器跨域被拦，只能用「复制提示词」模式。')));
 
   /* 数据 */
   parts.push(card('数据',
