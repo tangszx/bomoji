@@ -340,5 +340,88 @@ const Plan = (() => {
     { event: '引体向上', full: '满分线常见 10 – 16 次', note: '地区差异最大的项目：有的城市 10 次满分、有的 16 次，务必查本地文件' },
   ];
 
-  return { paces, pullLevel, phaseFor, recoveryStage, PHASE_NAMES, RECOVERY_NAMES, buildWeek, STANDARDS_REF, FOCUS_NAMES };
+  /* ---------- 考前预估 ----------
+   * 用最小二乘法对已录成绩做趋势外推，预估考试日的成绩。
+   * 数据少时诚实标注「不准」，随每周测试自动变准。
+   */
+  function project(records, target, examDate, today, lowerBetter) {
+    if (!records || records.length < 2 || !examDate) return null;
+    const daysToExam = daysBetween(today, examDate);
+    if (daysToExam <= 0) return null;
+    const t0 = strToDate(records[0].date).getTime();
+    const pts = records.map(r => [(strToDate(r.date).getTime() - t0) / DAY_MS, r.value]);
+    const n = pts.length;
+    let sx = 0, sy = 0, sxx = 0, sxy = 0;
+    for (const [x, y] of pts) { sx += x; sy += y; sxx += x * x; sxy += x * y; }
+    const denom = n * sxx - sx * sx;
+    if (denom === 0) return null;
+    const slope = (n * sxy - sx * sy) / denom;          // 每天原始变化量
+    const intercept = (sy - slope * sx) / n;
+    const xExam = (strToDate(examDate).getTime() - t0) / DAY_MS;
+    const projected = intercept + slope * xExam;
+    const latest = records[records.length - 1].value;
+    const weeks = daysToExam / 7;
+    /* 进步速度与达标所需速度，统一换算成「每周提高多少」（正数=在变好） */
+    const improving = lowerBetter ? -slope * 7 : slope * 7;
+    const needPerWeek = Math.abs(target - latest) / weeks;
+    const gap = lowerBetter ? target - projected : projected - target;
+    const achieved = gap >= 0;
+    const near = achieved || Math.abs(gap) <= Math.abs(target) * 0.04;
+    const verdict = achieved ? '可达成 ✓' : near ? '逼近目标' : '需要提速';
+    return {
+      projected, improving, needPerWeek, daysToExam,
+      achieved, verdict,
+      confident: n >= 4,
+      points: n,
+    };
+  }
+
+  /* ---------- 训练依据（权威来源的要点，展示在计划页） ---------- */
+
+  const EVIDENCE = [
+    {
+      h: '每天 60 分钟是底座',
+      p: 'WHO《身体活动与久坐行为指南》：5-17 岁每天至少 60 分钟中高强度活动（有氧为主），每周至少 3 天剧烈有氧与肌肉骨骼强化。你的课表加体育课已覆盖大部分，课间多走动跳绳即可补足。',
+      src: 'WHO 2020 指南 / 中国人群身体活动指南(2021)',
+    },
+    {
+      h: '1000 米七成靠有氧',
+      p: '中距离跑的供能约七至八成依赖有氧系统——所以课表先打有氧底（轻松跑/节奏跑），再间歇课拉最大摄氧量上限；比赛策略用全程匀速、最后 300 米逐步提速，这是运动生理学对中距离跑的标准结论。',
+      src: '运动生理学通识（中距离跑供能特征）',
+    },
+    {
+      h: '青少年力量训练是安全的',
+      p: 'NSCA 立场声明：在动作质量优先、有监督的前提下，青少年抗阻训练安全且有益。推荐 1-3 组 × 6-15 次、每周 2-3 个不连续日。你的课表只做自重、不做负重与力竭，正处于该框架内。',
+      src: 'NSCA Youth Resistance Training Position Statement (Faigenbaum et al., 2009)',
+    },
+    {
+      h: '跳跃先学落地，再渐进冲击',
+      p: 'NSCA 对青少年增强式训练的要求：从低量低强度开始、先掌握落地缓冲技术，再逐步加量。课表的跳跃课次数少、质量优先，且安排在塑胶/草地等软质地面；手术康复期的分级渐进同源于此逻辑。',
+      src: 'NSCA Position Statement（plyometric/增强式训练部分）',
+    },
+    {
+      h: '减量周与考前 taper',
+      p: '训练适应发生在恢复期。每 4 周插入减量周（总量 -30%）、考前一周减量保强度，让身体在考试日达到峰值——这是竞技体育标准做法，同样适用于中考备考。',
+      src: '运动训练学（周期化与 taper 通识）',
+    },
+    {
+      h: '「薄肌」= 体成分，不是体重数字',
+      p: '对未成年人：不节食、不碰减重药与成人补剂。足量蛋白（约 1.2-1.6 g/kg/天）、睡够 8-10 小时、规律训练，身材自然走向精瘦——这正是「薄肌」的科学实现路径。',
+      src: 'ACSM/ISSN 关于运动员蛋白摄入的立场（青少年取保守值）',
+    },
+    {
+      h: '睡眠是第二训练',
+      p: '青少年推荐每晚 8-10 小时睡眠：生长激素分泌与肌肉、骨骼修复主要在深睡中完成。睡眠不足直接拉高受伤风险、拖慢成绩进步——app 的问卷每晚都在盯这一项。',
+      src: '美国儿科学会(AAP)/CDC 青少年睡眠建议',
+    },
+  ];
+
+  const PHASE_INTENT = {
+    base: '目标：把有氧底子和动作模式打牢，成绩会在后程加速',
+    build: '目标：强度上台阶，间歇与爆发力把上限拉高',
+    peak: '目标：强度保持、总量回落，把状态磨到峰值',
+    taper: '目标：减量恢复，让身体在考试日达到最佳',
+  };
+
+  return { paces, pullLevel, phaseFor, recoveryStage, PHASE_NAMES, RECOVERY_NAMES, buildWeek, STANDARDS_REF, FOCUS_NAMES, project, EVIDENCE, PHASE_INTENT };
 })();
