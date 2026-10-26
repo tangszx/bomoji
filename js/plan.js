@@ -341,10 +341,11 @@ const Plan = (() => {
   ];
 
   /* ---------- 考前预估 ----------
-   * 用最小二乘法对已录成绩做趋势外推，预估考试日的成绩。
+   * 对已录成绩做趋势外推，但训练进步边际递减，不能匀速直线外推：
+   * 近 4 周按实测速率算，之后按一半速率（平台期）算，并夹在合理上限内。
    * 数据少时诚实标注「不准」，随每周测试自动变准。
    */
-  function project(records, target, examDate, today, lowerBetter) {
+  function project(records, target, examDate, today, lowerBetter, kind) {
     if (!records || records.length < 2 || !examDate) return null;
     const daysToExam = daysBetween(today, examDate);
     if (daysToExam <= 0) return null;
@@ -356,14 +357,16 @@ const Plan = (() => {
     const denom = n * sxx - sx * sx;
     if (denom === 0) return null;
     const slope = (n * sxy - sx * sy) / denom;          // 每天原始变化量
-    const intercept = (sy - slope * sx) / n;
-    const xExam = (strToDate(examDate).getTime() - t0) / DAY_MS;
-    const projected = intercept + slope * xExam;
     const latest = records[records.length - 1].value;
-    const weeks = daysToExam / 7;
-    /* 进步速度与达标所需速度，统一换算成「每周提高多少」（正数=在变好） */
-    const improving = lowerBetter ? -slope * 7 : slope * 7;
-    const needPerWeek = Math.abs(target - latest) / weeks;
+    const weeks = Math.min(daysToExam / 7, 16);
+    /* 近 4 周全速、之后半速：总进步量（正数=在变好的方向） */
+    const ratePerWeek = Math.abs(slope) * 7;
+    const rawTotal = ratePerWeek * Math.min(weeks, 4) + ratePerWeek * 0.5 * Math.max(0, weeks - 4);
+    let projected = lowerBetter ? latest - rawTotal : latest + rawTotal;
+    /* 合理上限，防止长期外推失真 */
+    projected = clampProjection(projected, kind);
+    const improving = (lowerBetter ? -slope : slope) * 7;
+    const needPerWeek = Math.abs(target - latest) / (daysToExam / 7);
     const gap = lowerBetter ? target - projected : projected - target;
     const achieved = gap >= 0;
     const near = achieved || Math.abs(gap) <= Math.abs(target) * 0.04;
@@ -374,6 +377,14 @@ const Plan = (() => {
       confident: n >= 4,
       points: n,
     };
+  }
+
+  /* 预估值的合理边界：时间 2'30"–6'40"、距离 3.2 米、次数 40 个 */
+  function clampProjection(v, kind) {
+    if (kind === 'time') return clamp(v, 150, 400);
+    if (kind === 'distance') return Math.min(v, 3.2);
+    if (kind === 'count') return Math.min(v, 40);
+    return v;
   }
 
   /* ---------- 训练依据（权威来源的要点，展示在计划页） ---------- */
