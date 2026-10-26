@@ -1,7 +1,7 @@
 /* 薄肌与自律 · Service Worker：缓存应用外壳，离线可用 */
 'use strict';
 
-const CACHE = 'bjzl-v1';
+const CACHE = 'bjzl-v1.3';
 const ASSETS = [
   './index.html',
   './manifest.webmanifest',
