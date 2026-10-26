@@ -41,15 +41,37 @@ Vercel / Netlify / Cloudflare Pages 拖拽部署即可，无任何构建步骤�
 
 ## AI 配置
 
-设置 → AI 分析：
+设置 → AI 分析，有两个一键预设：
 
-| 字段 | 说明 |
+| 服务商 | 接口地址 | 模型 | 说明 |
+| --- | --- | --- | --- |
+| **DeepSeek** | `https://api.deepseek.com` | `deepseek-chat` | **浏览器可直连，app 内全自动**；按量计费，个人用量约几毛/月 |
+| 智谱 | `https://open.bigmodel.cn/api/paas/v4` | `glm-4-flash` | 有免费额度，但浏览器跨域被拦，只能「复制提示词」 |
+
+可选模型还有 `deepseek-reasoner`（更强也更慢，适合看复杂状态）。API Key 只保存在本机
+localStorage，请求由设备直连服务商，不经过任何第三方。
+
+> 快捷方式：打开带 `?key=你的Key&base=https%3A%2F%2Fapi.deepseek.com&model=deepseek-chat`
+> 的链接，app 自动保存并立即从地址栏清除。
+
+### 关于跨域
+
+- **DeepSeek 允许浏览器跨域直连**（2026-10 实测 HTTP 200），因此 app 内「AI 深度分析」
+  「AI 调整下周计划」可直接全自动工作；
+- 智谱接口不允许浏览器直连，会提示失败并自动提供**「复制提示词」**降级方案；
+- 若日后需要别的服务商，可用 `tools/cf-worker.js` 部署一个免费的 Cloudflare Worker 中转
+  （只转发目标服务商、只放行你的站点，密钥不落 Worker），把接口地址改成 Worker 地址即可。
+
+## 训练依据（app 内的权威来源）
+
+| 要点 | 来源 |
 | --- | --- |
-| 接口地址 | OpenAI 兼容的 chat/completions 基址，默认智谱 `https://open.bigmodel.cn/api/paas/v4` |
-| 模型 | 默认 `glm-4-flash`（免费）；可换任何兼容模型 |
-| API Key | 只保存在本机 localStorage，请求由设备直连服务商，不经过任何第三方 |
-
-若浏览器直连被跨域策略拦截，状态卡与计划页会提供「复制提示词」降级方案。
+| 每天 60 分钟中高强度活动、每周 3 天肌肉骨骼强化 | [WHO《身体活动与久坐行为指南》](https://www.who.int/zh/news-room/fact-sheets/detail/physical-activity)、中国人群身体活动指南(2021) |
+| 青少年抗阻训练安全、1-3 组 × 6-15 次、每周 2-3 个非连续日 | [NSCA Youth Resistance Training Position Statement (2009)](https://www.nsca.com/education/articles/infographics/youth-resistance-training/) |
+| 增强式训练从低量开始、先掌握落地 | NSCA 立场声明（plyometric 部分） |
+| 周期化、每 4 周减量、考前 taper | 运动训练学通识 |
+| 蛋白质 1.2-1.6 g/kg/天、青少年取值 | ACSM/ISSN 立场（青少年取保守值） |
+| 青少年每晚 8-10 小时睡眠 | 美国儿科学会(AAP)/CDC |
 
 ## 安全声明
 
