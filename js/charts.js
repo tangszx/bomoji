@@ -10,11 +10,6 @@ const Charts = (() => {
     return n;
   }
 
-  /* 读取 CSS 令牌颜色 */
-  function token(name) {
-    return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#4fe0a8';
-  }
-
   /* 折线图：points = [{x:label, y:number}]，opts: {target:{y,label}, unit, decimals, reversed}
    * reversed：值越小越好（如跑步时间），目标线在下方 */
   function line(container, points, opts = {}) {
@@ -56,11 +51,11 @@ const Charts = (() => {
     const d = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${X(i).toFixed(1)},${Y(p.y).toFixed(1)}`).join('');
     svg.append(svgEl('path', { d, class: 'chart-line' }));
 
-    /* 首末点小圆 + 末点数值 */
+    /* 首末点小圆 + 末点数值（末点靠右时数值往左对齐，避免溢出） */
     const last = points[points.length - 1];
-    const dot = svgEl('circle', { cx: X(points.length - 1), cy: Y(last.y), r: 4, class: 'chart-dot' });
-    svg.append(dot);
-    const vl = svgEl('text', { x: X(points.length - 1), y: Y(last.y) - 10, class: 'chart-value', 'text-anchor': (points.length - 1) / (points.length - 1) > 0.85 ? 'end' : 'middle' });
+    const lastX = X(points.length - 1);
+    svg.append(svgEl('circle', { cx: lastX, cy: Y(last.y), r: 4, class: 'chart-dot' }));
+    const vl = svgEl('text', { x: lastX, y: Y(last.y) - 10, class: 'chart-value', 'text-anchor': lastX / W > 0.82 ? 'end' : 'middle' });
     vl.textContent = fmt(last.y) + (opts.unit ? ' ' + opts.unit : '');
     svg.append(vl);
 
