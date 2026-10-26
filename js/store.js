@@ -37,6 +37,7 @@ function defaultState() {
       apiKey: '',
       model: 'glm-4-flash',
     },
+    ui: { guideDismissed: false },
   };
 }
 
