@@ -311,6 +311,14 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .info-block:last-child { margin-bottom: 0; }
 .info-block h3 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
 .info-block p { font-size: 13.5px; color: var(--text); line-height: 1.6; }
+.src { font-size: 12px; color: var(--faint); margin-top: 3px; }
+
+/* 考前预估 */
+.proj-row { display: flex; align-items: baseline; gap: 10px; min-height: 36px; border-top: 1px solid var(--rule); }
+.proj-row:first-child { border-top: none; }
+.proj-name { font-size: 13.5px; font-weight: 500; flex: none; }
+.proj-val { font-size: 13.5px; margin-left: auto; color: var(--text); }
+.proj-verdict { font-size: 12px; text-align: right; }
 .ref-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .ref-table th { text-align: left; font-weight: 500; color: var(--faint); font-size: 12px; padding: 0 8px 6px 0; }
 .ref-table td { padding: 8px 8px 8px 0; border-top: 1px solid var(--rule); vertical-align: top; }
