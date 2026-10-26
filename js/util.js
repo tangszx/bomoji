@@ -119,7 +119,24 @@ function mdLite(text) {
   return out.join('');
 }
 
-function debounce(fn, ms) {
-  let t = null;
-  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+/* 复制文本：优先 Clipboard API（需安全上下文），失败回退 execCommand（局域网 http 预览可用） */
+async function copyText(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch (_) { /* 走回退 */ }
+  try {
+    const ta = el('textarea', { style: 'position:fixed;top:-999px;opacity:0' });
+    ta.value = text;
+    document.body.append(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  } catch (_) {
+    return false;
+  }
 }
