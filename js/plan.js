@@ -207,8 +207,6 @@ const Plan = (() => {
   function buildWeek(weekStartDate, state) {
     const prof = state.profile();
     const cur = state.current();
-    const p = paces(prof.targets.run1000);
-    const level = pullLevel(cur.pullups);
     const daysToExam = prof.examDate ? daysBetween(weekStartDate, prof.examDate) : 999;
     const phase = phaseFor(daysToExam);
     const stage = recoveryStage(state, weekStartDate);
@@ -217,6 +215,33 @@ const Plan = (() => {
     const weekIndex = Math.max(0, Math.floor(daysBetween(anchor, weekStartDate) / 7));
     const deload = !inRecovery && (phase === 'base' || phase === 'build') && weekIndex % 4 === 3;
     const biweeklyTest = weekIndex % 2 === 1 && phase !== 'base' && !inRecovery;
+
+    /* AI 调整计划：若存在且对应当周，直接作为该周课表（可勾选、计入完成度） */
+    const ai = state.state.aiPlan;
+    if (ai && ai.forWeekStart === weekStartDate && Array.isArray(ai.week) && ai.week.length === 7) {
+      const days = ai.week.map((d, i) => {
+        const date = addDays(weekStartDate, i);
+        const items = (d.items || []).map(it => ({
+          name: it.name || '训练',
+          tag: /休息/.test(it.name || '') ? 'rest' : 'ai',
+          min: Number(it.min) || 0,
+          detail: it.detail || '',
+        }));
+        if (!items.length) items.push({ name: '休息日', tag: 'rest', min: 0, detail: 'AI 安排的休息。' });
+        const main = items.find(it => it.tag !== 'rest');
+        return {
+          date, weekday: WEEKDAY_NAMES[i],
+          items, focus: main ? (d.focus || FOCUS_NAMES[main.tag] || '训练') : '休息',
+        };
+      });
+      return {
+        weekStart: weekStartDate, phase, phaseName: PHASE_NAMES[phase] + ' · AI 调整',
+        inRecovery, stage, deload, days, daysToExam, ai: true,
+      };
+    }
+
+    const p = paces(prof.targets.run1000);
+    const level = pullLevel(cur.pullups);
 
     let gens;
     if (phase === 'taper' && daysToExam <= 10 && !inRecovery) {
@@ -257,7 +282,7 @@ const Plan = (() => {
           () => [warm, pullGtg(level), coreSession()],
           () => friShort(inRecovery, stage, p),
           () => satMain('run', inRecovery, stage, phase, p, biweeklyTest),
-          () => [warm, runEasyShort(p)],
+          null,                                                   // 周日全休（6 天训练=周一~周六）
         ];
       }
     }
