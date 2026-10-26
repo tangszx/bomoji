@@ -163,15 +163,15 @@ function examProjection() {
   if (!prof.examDate) return null;
   const defs = [
     {
-      id: 'run1000', name: '1000 米', lowerBetter: true,
+      id: 'run1000', name: '1000 米', lowerBetter: true, kind: 'time',
       fmt: v => fmtRunTime(Math.round(v)), rateFmt: v => fmtRunTime(Math.abs(Math.round(v))) + '/周',
     },
     {
-      id: 'jump', name: '立定跳远', lowerBetter: false,
+      id: 'jump', name: '立定跳远', lowerBetter: false, kind: 'distance',
       fmt: v => v.toFixed(2) + ' 米', rateFmt: v => Math.abs(v).toFixed(2) + ' 米/周',
     },
     {
-      id: 'pullups', name: '引体向上', lowerBetter: false,
+      id: 'pullups', name: '引体向上', lowerBetter: false, kind: 'count',
       fmt: v => Math.round(v) + ' 个', rateFmt: v => Math.abs(Math.round(v)) + ' 个/周',
     },
   ];
@@ -179,7 +179,7 @@ function examProjection() {
   let any = false;
   for (const d of defs) {
     const recs = Store.state.records.filter(r => r.event === d.id).sort((a, b) => (a.date < b.date ? -1 : 1));
-    const p = Plan.project(recs, prof.targets[d.id], prof.examDate, todayStr(), d.lowerBetter);
+    const p = Plan.project(recs, prof.targets[d.id], prof.examDate, todayStr(), d.lowerBetter, d.kind);
     if (!p) { rows.push({ name: d.name, text: '——', verdict: '记录 2 次后开启', ok: false }); continue; }
     any = true;
     rows.push({
@@ -267,7 +267,7 @@ function viewPlan() {
   const proj = examProjection();
   if (proj) {
     parts.push(card('考前预估（按已录成绩的趋势推算）',
-      el('div', { class: 'proj-list' }, proj.map(row =>
+      el('div', { class: 'proj-list' }, proj.rows.map(row =>
         el('div', { class: 'proj-row' },
           el('span', { class: 'proj-name' }, row.name),
           el('span', { class: 'proj-val num' }, row.text),
