@@ -36,6 +36,8 @@ const AI = (() => {
   async function chat(system, user, maxTokens) {
     const { apiBase, apiKey, model } = Store.state.settings;
     const url = apiBase.replace(/\/+$/, '') + '/chat/completions';
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 60000);   // 60 秒超时，防止按钮永久卡死
     let resp;
     try {
       resp = await fetch(url, {
@@ -53,9 +55,13 @@ const AI = (() => {
           temperature: 0.4,
           max_tokens: maxTokens || 900,
         }),
+        signal: ctrl.signal,
       });
     } catch (err) {
+      if (err && err.name === 'AbortError') throw new Error('请求超时（60 秒），请重试');
       throw new Error('NETWORK');
+    } finally {
+      clearTimeout(timer);
     }
     if (!resp.ok) {
       let msg = `HTTP ${resp.status}`;
@@ -93,7 +99,7 @@ const AI = (() => {
     const w = latestCheckin && latestCheckin.workout;
     const rec = p.recovery;
     const recLine = rec && rec.legSurgery
-      ? `重要：腿部做过骨肿瘤切除手术${rec.surgeryDate ? '（约 ' + rec.surgeryDate + '）' : ''}，术后恢复中${rec.doctorClear ? '，医生已确认可正常跑跳' : '，尚未获得医生跑跳确认，计划正按保守的康复分期渐进'}。涉及手术腿的任何深部疼痛都应建议停训并复诊。`
+      ? `重要：腿部做过手术${rec.surgeryDate ? '（约 ' + rec.surgeryDate + '）' : ''}，术后恢复中${rec.doctorClear ? '，医生已确认可正常跑跳' : '，尚未获得医生跑跳确认，计划正按保守的康复分期渐进'}。涉及手术腿的任何深部疼痛都应建议停训并复诊。`
       : '';
     const q = w ? [
       '—— 最新训练后问卷 ——',
@@ -103,7 +109,7 @@ const AI = (() => {
       `静息心率：${w.restingHr || '未填'}`,
       `肌肉酸痛：${w.soreness || '未填'}${w.pain && w.pain.length ? '（疼痛部位：' + w.pain.join('、') + '）' : ''}`,
       `红旗症状：${w.redflags && w.redflags.length ? w.redflags.join('、') : '无'}`,
-      `今日饮水：约 ${w.waterMl || '未填'} 毫升`,
+      `今日饮水：约 ${latestCheckin.waterMl || '未填'} 毫升`,
       w.note ? `补充说明：${w.note}` : '',
     ].filter(Boolean).join('\n') : '（无问卷）';
 
