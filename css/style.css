@@ -215,7 +215,7 @@ h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.
 input[type="text"], input[type="number"], input[type="date"], input[type="url"], input[type="password"], textarea {
   width: 100%; min-height: 42px; padding: 9px 12px;
   background: var(--input-bg); border: 1px solid var(--control); border-radius: 6px;
-  font-size: 15px;
+  font-size: 16px;   /* ≥16px，避免 iOS Safari 聚焦时自动放大页面 */
 }
 textarea { resize: vertical; line-height: 1.5; }
 input:focus, textarea:focus { outline: none; border-color: var(--accent); }
@@ -283,9 +283,11 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .gate-nums { font-size: 13px; }
 .gate-nums b { font-size: 16px; font-weight: 650; margin-right: 2px; }
 
-/* ---------- 打卡历史 ---------- */
+/* ---------- 打卡历史 / 成绩管理 ---------- */
 .history-row { display: flex; align-items: center; gap: 10px; min-height: 42px; border-top: 1px solid var(--rule); font-size: 13.5px; }
 .history-row:first-of-type { border-top: none; }
+.rec-del, .history-row .btn.sm { margin-left: 4px; flex: none; }
+.rec-del { min-width: 44px; }
 .history-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .dot-ok { background: var(--accent); }
 .dot-warn { background: var(--warning); }
