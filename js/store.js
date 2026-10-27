@@ -38,6 +38,7 @@ function defaultState() {
       model: 'glm-4-flash',
     },
     ui: { guideDismissed: false, lastBackupAt: '' },
+    badges: {},                // 徽章 id -> 达成日期
   };
 }
 
