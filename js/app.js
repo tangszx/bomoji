@@ -79,8 +79,26 @@ function toggleDone(date, key, checkin) {
   const i = checkin.planDone.indexOf(key);
   if (i >= 0) checkin.planDone.splice(i, 1);
   else checkin.planDone.push(key);
+  const week = Plan.buildWeek(weekStart(date), Store);
+  const day = week.days.find(dd => dd.date === date);
+  if (day) {
+    if (dayAllDone(day, checkin)) checkin.allDone = date;
+    else delete checkin.allDone;
+  }
+  Store.save();
+  const praise = checkin.allDone && i < 0 ? Rewards.pick(Rewards.PRAISE_DAY, date) : null;
+  const fresh = Rewards.check();
   Store.save();
   render();
+  if (praise) toast(praise);
+  celebrate(fresh);
+}
+
+/* 新徽章提示（同一次操作获得多个时，汇总一条 toast） */
+function celebrate(fresh) {
+  if (fresh && fresh.length) {
+    toast('获得徽章：' + fresh.map(b => b.name).join('、'));
+  }
 }
 
 function dayAllDone(day, checkin) {
@@ -135,6 +153,16 @@ function viewToday() {
     mains.length ? el('button', { class: 'btn btn-primary', onclick: () => openQuiz() }, '训练后打卡 · 记录状态') : el('button', { class: 'btn btn-primary', onclick: () => openQuiz() }, '记录状态（今天原计划休息）'),
     mains.length && dayAllDone(day, c) ? el('p', { class: 'done-note accent' }, '今日训练已完成 ✓') : null));
 
+  /* 断签温柔关怀：不羞辱，只欢迎回来 */
+  const lastActive = Rewards.lastActiveDate(Store.state);
+  const gapDays = lastActive ? daysBetween(lastActive, today) : 0;
+  if (gapDays >= 3 && Store.state.ui.lastWelcomeBack !== lastActive) {
+    parts.push(el('div', { class: 'notice notice-ok' },
+      el('h3', {}, '回来就好'),
+      el('p', {}, `有 ${gapDays - 1} 天没记录了。断掉的那段不叫失败，叫休息——计划还在这里等你，从今天重新数就好。`),
+      el('button', { class: 'btn btn-ghost', onclick: () => { Store.state.ui.lastWelcomeBack = lastActive; Store.save(); render(); } }, '继续')));
+  }
+
   /* 备份提醒：数据只在本机，丢设备=丢一切 */
   const lastBk = Store.state.ui.lastBackupAt;
   const daysSinceBk = lastBk ? daysBetween(lastBk, today) : null;
@@ -152,6 +180,27 @@ function viewToday() {
 
   /* 训练后状态卡 */
   if (c.workout) parts.push(statusCard(today, c));
+
+  /* 自律之路：等级 + 徽章（全部由真实记录推导） */
+  const xp = Rewards.computeXP(Store.state);
+  const lv = Rewards.levelFor(xp);
+  const badgeState = Store.state.badges || {};
+  const earned = Rewards.BADGES.filter(b => badgeState[b.id]);
+  const locked = Rewards.BADGES.filter(b => !badgeState[b.id]);
+  parts.push(card('自律之路',
+    el('div', { class: 'level-row' },
+      el('span', { class: 'level-badge num' }, 'Lv.' + lv.lv),
+      el('div', { class: 'level-main' },
+        el('b', {}, lv.name),
+        el('span', { class: 'muted small' }, lv.note)),
+      el('span', { class: 'num level-xp' }, String(xp))),
+    lv.next
+      ? Charts.progressNode(lv.ratio, `已积累 ${xp} 自律值`, `下一级「${lv.next.name}」还差 ${lv.next.xp - xp}`)
+      : el('p', { class: 'accent small', style: 'margin-top:8px' }, '已到顶——剩下的交给考场'),
+    el('div', { class: 'badge-strip' },
+      earned.map(b => el('span', { class: 'badge-chip on', title: b.desc }, b.name)),
+      locked.map(b => el('span', { class: 'badge-chip', title: b.desc }, b.name))),
+    el('p', { class: 'muted small' }, `徽章 ${earned.length}/${Rewards.BADGES.length} · 自律值全部来自真实记录：训练项+10 · 问卷+15 · 习惯+5 · 成绩+20 · 破纪录+30`)));
 
   /* 本周概览 */
   const trainingDays = week.days.filter(d => d.items.some(it => it.tag !== 'rest'));
@@ -321,7 +370,7 @@ function viewPlan() {
   const aiPlan = Store.state.aiPlan;
   if (aiPlan && aiPlan.forWeekStart === weekStartDate) {
     parts.push(el('div', { class: 'notice notice-ok' },
-      el('h3', {}, '本周是 AI 调整的计划'),
+      el('h3', {}, ui.weekOffset === 0 ? '本周是 AI 调整的计划' : '这一周是 AI 调整的计划'),
       aiPlan.reason ? el('p', {}, aiPlan.reason) : null,
       el('p', { class: 'muted small' }, '照常勾选打卡即可，完成度会计入本周概览。')));
   }
@@ -480,8 +529,9 @@ function viewLog() {
         body);
     }) : el('p', { class: 'muted' }, '还没有 AI 分析。训练后在「今日」页打卡即可一键分析。')));
 
-  /* 打卡历史 */
-  const dates = Object.keys(Store.state.checkins).sort().reverse().slice(0, 14);
+  /* 打卡历史（计划页渲染会为本周预建空打卡对象，这里只展示今天及以前） */
+  const todayNow = todayStr();
+  const dates = Object.keys(Store.state.checkins).filter(d => d <= todayNow).sort().reverse().slice(0, 14);
   parts.push(card('打卡历史',
     dates.length ? el('div', { class: 'history' }, dates.map(d => {
       const c = Store.state.checkins[d];
@@ -490,7 +540,7 @@ function viewLog() {
         el('span', { class: 'history-dot ' + (lv ? { ok: 'dot-ok', caution: 'dot-warn', stop: 'dot-stop' }[lv] : 'dot-rest') }),
         el('span', { class: 'history-date num' }, d),
         c.workout ? el('span', { class: 'history-meta' }, `RPE ${c.workout.rpe ?? '—'} · 睡眠 ${c.workout.sleepH ?? '—'}h${c.workout.pain && c.workout.pain.length ? ' · ' + c.workout.pain.join('/') : ''}`) : el('span', { class: 'history-meta muted' }, c.planDone.length ? `完成 ${c.planDone.length} 项` : '未训练'),
-        !c.workout && d < todayStr() ? el('button', { class: 'btn btn-ghost sm', onclick: () => openQuiz(d) }, '补卡') : null);
+        !c.workout && d < todayNow ? el('button', { class: 'btn btn-ghost sm', onclick: () => openQuiz(d) }, '补卡') : null);
     })) : el('p', { class: 'muted' }, '还没有打卡记录。第一次训练后记得点「训练后打卡」。')));
 
   return el('div', { class: 'view' }, ...parts);
@@ -520,11 +570,19 @@ function recordForm() {
       if (ev === 'run1000') { value = parseRunTime(raw); if (!value) { err.textContent = '格式看不懂，请填成 4\'05" 或 4:05 这样的分秒。'; err.hidden = false; return; } }
       if (ev === 'jump') { value = Number(raw); if (!(value > 0.5 && value < 5)) { err.textContent = '请填合理的跳远距离（米），如 2.35。'; err.hidden = false; return; } }
       if (ev === 'pullups') { value = Math.round(Number(raw)); if (!(value >= 0 && value <= 60)) { err.textContent = '请填 0-60 之间的次数。'; err.hidden = false; return; } }
+      const pb = Rewards.isPB(Store.state.records, ev, value);
       Store.state.records.push({ date, event: ev, value, note: '' });
       Store.save();
       input.value = '';
-      toast('已记录：' + { run1000: fmtRunTime(value) + '（1000米）', jump: value + ' 米', pullups: value + ' 个' }[ev] + (date === todayStr() ? '' : `（${fmtDateCn(date)}）`));
+      const label = { run1000: '1000米 ' + fmtRunTime(value), jump: value + ' 米', pullups: value + ' 个' }[ev];
+      const praise = pb.pb
+        ? `个人新纪录！超过了之前的 ${ev === 'run1000' ? fmtRunTime(pb.best) : pb.best}${ev === 'jump' ? ' 米' : ev === 'pullups' ? ' 个' : ''}`
+        : Rewards.pick(Rewards.PRAISE_RECORD, date + ev);
+      toast(`已记录 ${label}${date === todayStr() ? '' : `（${fmtDateCn(date)}）`} · ${praise}`);
+      const fresh = Rewards.check();
+      Store.save();
       render();
+      celebrate(fresh);
     },
   }, '保存');
   const wrap = el('div', { class: 'record-form' }, seg,
@@ -549,7 +607,15 @@ function viewFuel() {
     el('div', { class: 'habit-grid' }, HABITS.map(h => el('button', {
       class: 'habit' + (c.habits[h.id] ? ' on' : ''),
       'aria-pressed': String(!!c.habits[h.id]),
-      onclick: () => { if (c.habits[h.id]) delete c.habits[h.id]; else c.habits[h.id] = 1; Store.save(); render(); },
+      onclick: () => {
+        if (c.habits[h.id]) delete c.habits[h.id]; else c.habits[h.id] = 1;
+        Store.save();
+        const fresh = Rewards.check();
+        Store.save();
+        render();
+        if (HABITS.every(x => c.habits[x.id])) toast('六项全满——这就是满分的一天');
+        celebrate(fresh);
+      },
     }, h.label))),
     el('p', { class: 'muted small' }, `今日 ${doneN}/${HABITS.length} · 全勾满就是完美的一天`)));
 
@@ -583,8 +649,8 @@ function viewFuel() {
     el('div', { class: 'water-row' },
       el('span', { class: 'num water-num' }, (water / 1000).toFixed(1)), el('span', { class: 'water-unit' }, '升 · 今日'),
       el('div', { class: 'btn-row' },
-        el('button', { class: 'btn btn-ghost sm', onclick: () => { c.waterMl = water + 250; Store.save(); render(); } }, '+250ml'),
-        el('button', { class: 'btn btn-ghost sm', onclick: () => { c.waterMl = water + 500; Store.save(); render(); } }, '+500ml'))),
+        el('button', { class: 'btn btn-ghost sm', onclick: () => { const was = water; c.waterMl = water + 250; Store.save(); const fresh = Rewards.check(); Store.save(); render(); if (was < 2000 && c.waterMl >= 2000) toast('今日 2 升达成——身体谢谢你'); celebrate(fresh); } }, '+250ml'),
+        el('button', { class: 'btn btn-ghost sm', onclick: () => { const was = water; c.waterMl = water + 500; Store.save(); const fresh = Rewards.check(); Store.save(); render(); if (was < 2000 && c.waterMl >= 2000) toast('今日 2 升达成——身体谢谢你'); celebrate(fresh); } }, '+500ml'))),
     el('p', { class: 'muted small' }, '目标 1.5-2 升/天。训练前后各 300-500 毫升；少量多次，别等渴了才喝。')));
 
   /* 营养原则 */
@@ -715,7 +781,7 @@ function viewSettings() {
       el('p', {}, '「薄肌从来不是讨好世界的筹码，而是你拿回人生主动权的第一步。」——薄肌不是瘦，是精瘦、有力、可控的身体；自律不是苦熬，是把训练、吃饭、睡觉这三件事日复一日地做对。这个 app 帮你把体育中考的三个项目拆成每天可执行的小事。')),
     el('div', { class: 'info-block' }, el('h3', {}, '安全声明'),
       el('p', {}, '本应用提供一般性训练参考，不构成医疗建议。未成年人训练请在家长或老师知情下进行；出现胸痛、头晕、关节锐痛或手术部位疼痛，立即停止并告知大人，必要时就医。训练前请确认手术医生已允许恢复运动。')),
-    el('p', { class: 'muted small' }, '薄肌与自律 v1.3 · 本地优先 PWA · 无需联网即可使用')));
+    el('p', { class: 'muted small' }, '薄肌与自律 v1.4 · 本地优先 PWA · 无需联网即可使用')));
   return el('div', { class: 'view' }, ...parts);
 }
 
@@ -806,13 +872,18 @@ function openQuiz(date) {
           close();
           render();
           const lv = Safety.evaluate({ ...c.workout, waterMl: c.waterMl || null }, [], Store.profile()).level;
+          const praisePool = lv === 'stop' ? Rewards.PRAISE_QUIZ_STOP : lv === 'caution' ? Rewards.PRAISE_QUIZ_CAUTION : Rewards.PRAISE_QUIZ_OK;
+          const praise = Rewards.pick(praisePool, d);
+          const fresh = Rewards.check();
+          Store.save();
           if (isToday) {
-            toast(lv === 'stop' ? '有需要重视的信号，看状态卡' : '打卡完成', lv === 'stop' ? 'bad' : undefined);
+            toast(praise, lv === 'stop' ? 'bad' : undefined);
             const n = document.querySelector('.notice');
             if (n) n.scrollIntoView({ behavior: 'smooth', block: 'start' });
           } else {
-            toast(`已补 ${fmtDateCn(d)} 的打卡`, lv === 'stop' ? 'bad' : undefined);
+            toast(`已补 ${fmtDateCn(d)} 的打卡 · ${praise}`, lv === 'stop' ? 'bad' : undefined);
           }
+          celebrate(fresh);
         },
       }, isToday ? '保存并评估' : '保存补卡')));
 
@@ -925,6 +996,8 @@ function captureKeyFromUrl() {
 
 function boot() {
   captureKeyFromUrl();
+  /* 启动时静默补算徽章（历史数据已达标的不漏发；弹提示只在交互时） */
+  try { const fresh = Rewards.check(); if (fresh.length) Store.save(); } catch (_) { /* 忽略 */ }
   const nav = el('nav', { class: 'bottom-nav', 'aria-label': '主导航' },
     NAV.map(n => el('button', {
       class: 'nav-btn', dataset: { route: n.id },
