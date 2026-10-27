@@ -240,7 +240,7 @@ const Plan = (() => {
       };
     }
 
-    const p = paces(prof.targets.run1000);
+    const p = paces(prof.targets.run1000) || paces(240);   // 目标异常时兜底 4'00"，防止课表崩塌
     const level = pullLevel(cur.pullups);
 
     let gens;
