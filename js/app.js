@@ -90,15 +90,24 @@ function toggleDone(date, key, checkin) {
   const fresh = Rewards.check();
   Store.save();
   render();
-  if (praise) toast(praise);
-  celebrate(fresh);
+  const msg = [praise, badgeText(fresh)].filter(Boolean).join(' · ');
+  if (msg) toast(msg);
 }
 
-/* 新徽章提示（同一次操作获得多个时，汇总一条 toast） */
-function celebrate(fresh) {
-  if (fresh && fresh.length) {
-    toast('获得徽章：' + fresh.map(b => b.name).join('、'));
-  }
+/* 新徽章文案（与夸奖语合并成一条提示，避免互相覆盖） */
+function badgeText(fresh) {
+  return fresh && fresh.length ? '获得徽章：' + fresh.map(b => b.name).join('、') : '';
+}
+
+/* 距下一级的预估：按历史日均自律值外推（目标梯度效应） */
+function nextLabel(lv, xp, today) {
+  const daysUsed = Store.state.startDate ? Math.max(1, daysBetween(Store.state.startDate, today) + 1) : 1;
+  const rate = xp / daysUsed;
+  const remain = lv.next.xp - xp;
+  if (rate <= 0) return `下一级「${lv.next.name}」还差 ${remain}`;
+  const days = Math.ceil(remain / rate);
+  if (days > 120) return `下一级「${lv.next.name}」还差 ${remain}`;
+  return `下一级「${lv.next.name}」约 ${days} 天后（按当前节奏）`;
 }
 
 function dayAllDone(day, checkin) {
@@ -195,7 +204,7 @@ function viewToday() {
         el('span', { class: 'muted small' }, lv.note)),
       el('span', { class: 'num level-xp' }, String(xp))),
     lv.next
-      ? Charts.progressNode(lv.ratio, `已积累 ${xp} 自律值`, `下一级「${lv.next.name}」还差 ${lv.next.xp - xp}`)
+      ? Charts.progressNode(lv.ratio, `已积累 ${xp} 自律值`, nextLabel(lv, xp, today))
       : el('p', { class: 'accent small', style: 'margin-top:8px' }, '已到顶——剩下的交给考场'),
     el('div', { class: 'badge-strip' },
       earned.map(b => el('span', { class: 'badge-chip on', title: b.desc }, b.name)),
@@ -217,7 +226,55 @@ function viewToday() {
     Charts.progressNode(trainingDays.length ? doneCount / trainingDays.length : 0,
       `已完成 ${doneCount} / ${trainingDays.length} 节`, `本周目标 ${trainingDays.length} 节`)));
 
+  /* 和上周的自己比：唯一健康的比较对象是过去的自己 */
+  const cmp = weeklyCompare(today);
+  if (cmp) {
+    const row = (name, cur, prev, unit) => {
+      const delta = cur - prev;
+      const deltaText = delta > 0 ? `+${delta}` : delta < 0 ? `${delta}` : '持平';
+      const good = delta > 0 || (delta === 0 && cur > 0);
+      return el('div', { class: 'cmp-row' },
+        el('span', { class: 'cmp-name' }, name),
+        el('span', { class: 'num cmp-cur' }, String(cur)),
+        el('span', { class: 'num cmp-prev' }, `上周 ${prev}`),
+        el('span', { class: 'cmp-delta ' + (delta > 0 ? 'accent' : delta < 0 ? 'muted' : 'muted') }, deltaText + (unit ? '' : '')));
+    };
+    parts.push(card('和上周的自己比',
+      el('div', { class: 'cmp-head' },
+        el('span', {}, ''),
+        el('span', { class: 'num' }, '本周'),
+        el('span', { class: 'num' }, '上周'),
+        el('span', {}, '变化')),
+      row('训练项完成', cmp.cur.items, cmp.prev.items),
+      row('训练后问卷', cmp.cur.quiz, cmp.prev.quiz),
+      row('习惯打卡', cmp.cur.habits, cmp.prev.habits),
+      el('p', { class: 'muted small' },
+        cmp.cur.items + cmp.cur.quiz + cmp.cur.habits >= cmp.prev.items + cmp.prev.quiz + cmp.prev.habits
+          ? '比上周更扎实了——保持这个节奏，注意睡眠跟上。'
+          : '这周慢了点也没关系，节奏稳住，回来就是进步。')));
+  }
+
   return el('div', { class: 'view' }, ...parts);
+}
+
+/* 本周（周一至今）与上周的完成量对比；上周完全没数据时不显示 */
+function weeklyCompare(today) {
+  const thisWs = weekStart(today);
+  const lastWs = addDays(thisWs, -7);
+  const count = (from, to) => {
+    let items = 0, quiz = 0, habits = 0;
+    for (const [d, c] of Object.entries(Store.state.checkins)) {
+      if (d < from || d > to) continue;
+      items += (c.planDone && c.planDone.length) || 0;
+      if (c.workout) quiz += 1;
+      habits += Object.keys(c.habits || {}).length;
+    }
+    return { items, quiz, habits };
+  };
+  const cur = count(thisWs, today);
+  const prev = count(lastWs, addDays(thisWs, -1));
+  if (!prev.items && !prev.quiz && !prev.habits) return null;
+  return { cur, prev };
 }
 
 /* 三项目考前预估（记录 ≥2 条才出，少时明确说数据不足） */
@@ -578,11 +635,10 @@ function recordForm() {
       const praise = pb.pb
         ? `个人新纪录！超过了之前的 ${ev === 'run1000' ? fmtRunTime(pb.best) : pb.best}${ev === 'jump' ? ' 米' : ev === 'pullups' ? ' 个' : ''}`
         : Rewards.pick(Rewards.PRAISE_RECORD, date + ev);
-      toast(`已记录 ${label}${date === todayStr() ? '' : `（${fmtDateCn(date)}）`} · ${praise}`);
       const fresh = Rewards.check();
       Store.save();
+      toast([`已记录 ${label}${date === todayStr() ? '' : `（${fmtDateCn(date)}）`} · ${praise}`, badgeText(fresh)].filter(Boolean).join(' · '));
       render();
-      celebrate(fresh);
     },
   }, '保存');
   const wrap = el('div', { class: 'record-form' }, seg,
@@ -613,8 +669,8 @@ function viewFuel() {
         const fresh = Rewards.check();
         Store.save();
         render();
-        if (HABITS.every(x => c.habits[x.id])) toast('六项全满——这就是满分的一天');
-        celebrate(fresh);
+        const msg = [HABITS.every(x => c.habits[x.id]) ? '六项全满——这就是满分的一天' : '', badgeText(fresh)].filter(Boolean).join(' · ');
+        if (msg) toast(msg);
       },
     }, h.label))),
     el('p', { class: 'muted small' }, `今日 ${doneN}/${HABITS.length} · 全勾满就是完美的一天`)));
@@ -649,8 +705,8 @@ function viewFuel() {
     el('div', { class: 'water-row' },
       el('span', { class: 'num water-num' }, (water / 1000).toFixed(1)), el('span', { class: 'water-unit' }, '升 · 今日'),
       el('div', { class: 'btn-row' },
-        el('button', { class: 'btn btn-ghost sm', onclick: () => { const was = water; c.waterMl = water + 250; Store.save(); const fresh = Rewards.check(); Store.save(); render(); if (was < 2000 && c.waterMl >= 2000) toast('今日 2 升达成——身体谢谢你'); celebrate(fresh); } }, '+250ml'),
-        el('button', { class: 'btn btn-ghost sm', onclick: () => { const was = water; c.waterMl = water + 500; Store.save(); const fresh = Rewards.check(); Store.save(); render(); if (was < 2000 && c.waterMl >= 2000) toast('今日 2 升达成——身体谢谢你'); celebrate(fresh); } }, '+500ml'))),
+        el('button', { class: 'btn btn-ghost sm', onclick: () => { const was = water; c.waterMl = water + 250; Store.save(); const fresh = Rewards.check(); Store.save(); render(); const msg = [(was < 2000 && c.waterMl >= 2000) ? '今日 2 升达成——身体谢谢你' : '', badgeText(fresh)].filter(Boolean).join(' · '); if (msg) toast(msg); } }, '+250ml'),
+        el('button', { class: 'btn btn-ghost sm', onclick: () => { const was = water; c.waterMl = water + 500; Store.save(); const fresh = Rewards.check(); Store.save(); render(); const msg = [(was < 2000 && c.waterMl >= 2000) ? '今日 2 升达成——身体谢谢你' : '', badgeText(fresh)].filter(Boolean).join(' · '); if (msg) toast(msg); } }, '+500ml'))),
     el('p', { class: 'muted small' }, '目标 1.5-2 升/天。训练前后各 300-500 毫升；少量多次，别等渴了才喝。')));
 
   /* 营养原则 */
@@ -876,14 +932,12 @@ function openQuiz(date) {
           const praise = Rewards.pick(praisePool, d);
           const fresh = Rewards.check();
           Store.save();
+          const msg = [isToday ? praise : `已补 ${fmtDateCn(d)} 的打卡 · ${praise}`, badgeText(fresh)].filter(Boolean).join(' · ');
+          toast(msg, lv === 'stop' ? 'bad' : undefined);
           if (isToday) {
-            toast(praise, lv === 'stop' ? 'bad' : undefined);
             const n = document.querySelector('.notice');
             if (n) n.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          } else {
-            toast(`已补 ${fmtDateCn(d)} 的打卡 · ${praise}`, lv === 'stop' ? 'bad' : undefined);
           }
-          celebrate(fresh);
         },
       }, isToday ? '保存并评估' : '保存补卡')));
 
