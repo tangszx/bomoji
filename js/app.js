@@ -79,6 +79,10 @@ function toggleDone(date, key, checkin) {
   const i = checkin.planDone.indexOf(key);
   if (i >= 0) checkin.planDone.splice(i, 1);
   else checkin.planDone.push(key);
+  /* 勾选的是尚未入库的日期（只读 stub）时，有内容才正式入库 */
+  if (Store.state.checkins[date] !== checkin && (checkin.planDone.length || checkin.workout)) {
+    Store.state.checkins[date] = checkin;
+  }
   const week = Plan.buildWeek(weekStart(date), Store);
   const day = week.days.find(dd => dd.date === date);
   if (day) {
@@ -92,6 +96,11 @@ function toggleDone(date, key, checkin) {
   render();
   const msg = [praise, badgeText(fresh)].filter(Boolean).join(' · ');
   if (msg) toast(msg);
+}
+
+/* 只读查看某日打卡（不创建对象，用于渲染） */
+function peekCheckin(date) {
+  return Store.state.checkins[date] || { planDone: [], habits: {} };
 }
 
 /* 新徽章文案（与夸奖语合并成一条提示，避免互相覆盖） */
@@ -213,11 +222,11 @@ function viewToday() {
 
   /* 本周概览 */
   const trainingDays = week.days.filter(d => d.items.some(it => it.tag !== 'rest'));
-  const doneCount = trainingDays.filter(d => dayAllDone(d, Store.checkin(d.date))).length;
+  const doneCount = trainingDays.filter(d => dayAllDone(d, peekCheckin(d.date))).length;
   parts.push(card('本周概览',
     el('div', { class: 'week-strip' }, week.days.map(d => {
       const hasT = d.items.some(it => it.tag !== 'rest');
-      const done = hasT && dayAllDone(d, Store.checkin(d.date));
+      const done = hasT && dayAllDone(d, peekCheckin(d.date));
       const isToday = d.date === today;
       return el('div', { class: 'week-cell' },
         el('span', { class: 'week-d' + (isToday ? ' is-today' : '') }, d.weekday.slice(1)),
@@ -437,7 +446,8 @@ function viewPlan() {
     el('p', { class: 'muted small' },
       week.inRecovery ? '目标：让手术腿安全承压，跳跃强度逐周渐进，骨头比你想象的需要更多耐心' : Plan.PHASE_INTENT[week.phase]),
     el('div', { class: 'plan-list' }, week.days.map(d => {
-      const checkin = Store.checkin(d.date);
+      /* 未来日期只读：不预建空打卡对象，避免污染打卡历史与存储 */
+      const checkin = d.date <= today ? Store.checkin(d.date) : (Store.state.checkins[d.date] || { planDone: [], habits: {} });
       const isToday = d.date === today;
       return el('div', { class: 'plan-day' + (isToday ? ' is-today' : '') },
         el('div', { class: 'plan-day-head' },
