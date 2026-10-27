@@ -363,6 +363,22 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .onboard-h { font-size: 15px; font-weight: 650; margin: 22px 0 10px; padding-top: 16px; border-top: 1px solid var(--rule); }
 .onboard .btn-block { width: 100%; margin-top: 18px; }
 
+/* ---------- 自律之路（激励系统） ---------- */
+.level-row { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+.level-badge { flex: none; font-size: 20px; font-weight: 700; color: var(--accent); }
+.level-main { flex: 1; display: flex; flex-direction: column; gap: 1px; }
+.level-main b { font-size: 15px; font-weight: 650; }
+.level-xp { flex: none; font-size: 18px; font-weight: 650; }
+.badge-strip { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.badge-chip {
+  font-size: 12px; padding: 4px 10px; border-radius: 999px;
+  border: 1px dashed var(--control); color: var(--faint);
+}
+.badge-chip.on {
+  border: 1px solid var(--accent); color: var(--accent);
+  background: var(--accent-tint); font-weight: 600;
+}
+
 /* ---------- Toast ---------- */
 #toast {
   position: fixed; left: 50%; transform: translateX(-50%) translateY(6px);
