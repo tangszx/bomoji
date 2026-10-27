@@ -379,6 +379,20 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   background: var(--accent-tint); font-weight: 600;
 }
 
+/* 和上周的自己比 */
+.cmp-head, .cmp-row {
+  display: grid; grid-template-columns: 1fr 56px 64px 56px;
+  align-items: baseline; gap: 6px; min-height: 32px;
+}
+.cmp-head { color: var(--faint); font-size: 12px; min-height: 24px; }
+.cmp-head .num:first-of-type { text-align: right; }
+.cmp-head span:last-child { text-align: right; }
+.cmp-row { border-top: 1px solid var(--rule); font-size: 13.5px; }
+.cmp-name { font-weight: 500; }
+.cmp-cur { font-weight: 650; text-align: right; font-size: 15px; }
+.cmp-prev { color: var(--faint); font-size: 12px; text-align: right; }
+.cmp-delta { text-align: right; font-size: 12.5px; }
+
 /* ---------- Toast ---------- */
 #toast {
   position: fixed; left: 50%; transform: translateX(-50%) translateY(6px);
